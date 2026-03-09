@@ -1,0 +1,579 @@
+﻿*** Begin Patch
+*** Update File: internal/platform/config/config.go
+@@
+-package config
+-
+-import "os"
+-
+-const defaultHTTPAddr = ":8080"
+-
+-type Config struct {
+-	HTTPAddr string
+-}
+-
+-func Load() Config {
+-	return Config{
+-		HTTPAddr: getEnv("APP_HTTP_ADDR", defaultHTTPAddr),
+-	}
+-}
+-
+-func getEnv(key string, fallback string) string {
+-	if value := os.Getenv(key); value != "" {
+-		return value
+-	}
+-
+-	return fallback
+-}
++package config
++
++import (
++	"fmt"
++	"os"
++	"strconv"
++	"time"
++)
++
++const (
++	defaultHTTPAddr       = ":8080"
++	defaultHTTPTimeoutSec = 15
++	defaultAppEnv         = "local"
++)
++
++type Config struct {
++	AppEnv       string
++	HTTPAddr     string
++	HTTPTimeout  time.Duration
++	ShutdownWait time.Duration
++}
++
++func Load() (Config, error) {
++	httpTimeoutSec, err := getEnvAsInt("APP_HTTP_TIMEOUT_SECONDS", defaultHTTPTimeoutSec)
++	if err != nil {
++		return Config{}, fmt.Errorf("load APP_HTTP_TIMEOUT_SECONDS: %w", err)
++	}
++
++	if httpTimeoutSec <= 0 {
++		return Config{}, fmt.Errorf("APP_HTTP_TIMEOUT_SECONDS must be greater than 0")
++	}
++
++	return Config{
++		AppEnv:       getEnv("APP_ENV", defaultAppEnv),
++		HTTPAddr:     getEnv("APP_HTTP_ADDR", defaultHTTPAddr),
++		HTTPTimeout:  time.Duration(httpTimeoutSec) * time.Second,
++		ShutdownWait: 10 * time.Second,
++	}, nil
++}
++
++func getEnv(key string, fallback string) string {
++	if value := os.Getenv(key); value != "" {
++		return value
++	}
++
++	return fallback
++}
++
++func getEnvAsInt(key string, fallback int) (int, error) {
++	value := getEnv(key, strconv.Itoa(fallback))
++	parsed, err := strconv.Atoi(value)
++	if err != nil {
++		return 0, fmt.Errorf("parse %s as int: %w", key, err)
++	}
++
++	return parsed, nil
++}
+*** Add File: internal/platform/logger/logger.go
++package logger
++
++import (
++	"context"
++	"encoding/json"
++	"io"
++	"os"
++	"sync"
++	"time"
++)
++
++type Logger struct {
++	out io.Writer
++	mu  sync.Mutex
++}
++
++type entry struct {
++	Timestamp string         `json:"timestamp"`
++	Level     string         `json:"level"`
++	Message   string         `json:"message"`
++	Fields    map[string]any `json:"fields,omitempty"`
++}
++
++func New() *Logger {
++	return &Logger{out: os.Stdout}
++}
++
++func (l *Logger) Info(message string, fields map[string]any) {
++	l.log("INFO", message, fields)
++}
++
++func (l *Logger) Error(message string, fields map[string]any) {
++	l.log("ERROR", message, fields)
++}
++
++func (l *Logger) InfoContext(ctx context.Context, message string, fields map[string]any) {
++	l.Info(message, withContextFields(ctx, fields))
++}
++
++func (l *Logger) ErrorContext(ctx context.Context, message string, fields map[string]any) {
++	l.Error(message, withContextFields(ctx, fields))
++}
++
++func (l *Logger) log(level string, message string, fields map[string]any) {
++	payload := entry{
++		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
++		Level:     level,
++		Message:   message,
++		Fields:    fields,
++	}
++
++	encoded, _ := json.Marshal(payload)
++
++	l.mu.Lock()
++	defer l.mu.Unlock()
++
++	_, _ = l.out.Write(append(encoded, '\n'))
++}
++
++func withContextFields(ctx context.Context, fields map[string]any) map[string]any {
++	merged := map[string]any{}
++	for key, value := range fields {
++		merged[key] = value
++	}
++
++	if requestID, ok := RequestIDFromContext(ctx); ok {
++		merged["request_id"] = requestID
++	}
++
++	return merged
++}
+*** Add File: internal/platform/logger/context.go
++package logger
++
++import "context"
++
++type contextKey string
++
++const requestIDKey contextKey = "request_id"
++
++func WithRequestID(ctx context.Context, requestID string) context.Context {
++	return context.WithValue(ctx, requestIDKey, requestID)
++}
++
++func RequestIDFromContext(ctx context.Context) (string, bool) {
++	requestID, ok := ctx.Value(requestIDKey).(string)
++	return requestID, ok
++}
+*** Add File: internal/platform/http/middleware/chain.go
++package middleware
++
++import "net/http"
++
++type Middleware func(http.Handler) http.Handler
++
++func Chain(handler http.Handler, middlewares ...Middleware) http.Handler {
++	wrapped := handler
++	for i := len(middlewares) - 1; i >= 0; i-- {
++		wrapped = middlewares[i](wrapped)
++	}
++
++	return wrapped
++}
+*** Add File: internal/platform/http/middleware/request_id.go
++package middleware
++
++import (
++	"crypto/rand"
++	"encoding/hex"
++	"net/http"
++
++	"github.com/jiazaiwanbi/second-hand-platform/internal/platform/logger"
++)
++
++const requestIDHeader = "X-Request-Id"
++
++func RequestID() Middleware {
++	return func(next http.Handler) http.Handler {
++		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++			requestID := r.Header.Get(requestIDHeader)
++			if requestID == "" {
++				requestID = newRequestID()
++			}
++
++			ctx := logger.WithRequestID(r.Context(), requestID)
++			w.Header().Set(requestIDHeader, requestID)
++
++			next.ServeHTTP(w, r.WithContext(ctx))
++		})
++	}
++}
++
++func newRequestID() string {
++	buf := make([]byte, 12)
++	_, err := rand.Read(buf)
++	if err != nil {
++		return "request-id-unavailable"
++	}
++
++	return hex.EncodeToString(buf)
++}
+*** Add File: internal/platform/http/middleware/recovery.go
++package middleware
++
++import (
++	"fmt"
++	"net/http"
++
++	"github.com/jiazaiwanbi/second-hand-platform/internal/platform/logger"
++	sharedhttp "github.com/jiazaiwanbi/second-hand-platform/internal/shared/httpx"
++)
++
++func Recovery(appLogger *logger.Logger) Middleware {
++	return func(next http.Handler) http.Handler {
++		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++			defer func() {
++				if recovered := recover(); recovered != nil {
++					appLogger.ErrorContext(r.Context(), "panic recovered", map[string]any{
++						"panic": fmt.Sprint(recovered),
++						"path":  r.URL.Path,
++					})
++
++					sharedhttp.WriteError(w, r, sharedhttp.NewInternalError())
++				}
++			}()
++
++			next.ServeHTTP(w, r)
++		})
++	}
++}
+*** Add File: internal/platform/http/middleware/timeout.go
++package middleware
++
++import (
++	"net/http"
++	"time"
++
++	sharedhttp "github.com/jiazaiwanbi/second-hand-platform/internal/shared/httpx"
++)
++
++func Timeout(timeout time.Duration) Middleware {
++	return func(next http.Handler) http.Handler {
++		return http.TimeoutHandler(next, timeout, sharedhttp.TimeoutResponse())
++	}
++}
+*** Add File: internal/platform/http/middleware/logger.go
++package middleware
++
++import (
++	"net/http"
++	"time"
++
++	"github.com/jiazaiwanbi/second-hand-platform/internal/platform/logger"
++)
++
++type statusRecorder struct {
++	http.ResponseWriter
++	statusCode int
++}
++
++func (r *statusRecorder) WriteHeader(statusCode int) {
++	r.statusCode = statusCode
++	r.ResponseWriter.WriteHeader(statusCode)
++}
++
++func RequestLogger(appLogger *logger.Logger) Middleware {
++	return func(next http.Handler) http.Handler {
++		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++			startedAt := time.Now()
++			recorder := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
++
++			next.ServeHTTP(recorder, r)
++
++			appLogger.InfoContext(r.Context(), "http request completed", map[string]any{
++				"method":      r.Method,
++				"path":        r.URL.Path,
++				"status_code": recorder.statusCode,
++				"duration_ms": time.Since(startedAt).Milliseconds(),
++			})
++		})
++	}
++}
+*** Add File: internal/shared/httpx/response.go
++package httpx
++
++import (
++	"encoding/json"
++	"net/http"
++)
++
++type SuccessResponse struct {
++	Code    string `json:"code"`
++	Message string `json:"message"`
++	Data    any    `json:"data"`
++}
++
++type ErrorDetail struct {
++	Field  string `json:"field,omitempty"`
++	Reason string `json:"reason"`
++}
++
++type ErrorResponse struct {
++	Code    string        `json:"code"`
++	Message string        `json:"message"`
++	Details []ErrorDetail `json:"details,omitempty"`
++}
++
++type AppError struct {
++	StatusCode int
++	Code       string
++	Message    string
++	Details    []ErrorDetail
++}
++
++func (e AppError) Error() string {
++	return e.Message
++}
++
++func WriteOK(w http.ResponseWriter, data any) {
++	writeJSON(w, http.StatusOK, SuccessResponse{
++		Code:    "OK",
++		Message: "success",
++		Data:    data,
++	})
++}
++
++func WriteError(w http.ResponseWriter, _ *http.Request, err AppError) {
++	writeJSON(w, err.StatusCode, ErrorResponse{
++		Code:    err.Code,
++		Message: err.Message,
++		Details: err.Details,
++	})
++}
++
++func TimeoutResponse() string {
++	response := ErrorResponse{
++		Code:    "TIMEOUT",
++		Message: "request timed out",
++	}
++
++	encoded, _ := json.Marshal(response)
++	return string(encoded)
++}
++
++func NewInternalError() AppError {
++	return AppError{
++		StatusCode: http.StatusInternalServerError,
++		Code:       "INTERNAL_ERROR",
++		Message:    "internal server error",
++	}
++}
++
++func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
++	w.Header().Set("Content-Type", "application/json")
++	w.WriteHeader(statusCode)
++	_ = json.NewEncoder(w).Encode(payload)
++}
+*** Update File: internal/transport/http/handler/health.go
+@@
+ package handler
+ 
+ import (
+ 	"net/http"
++
++	sharedhttp "github.com/jiazaiwanbi/second-hand-platform/internal/shared/httpx"
+ )
+@@
+ func Healthz(w http.ResponseWriter, _ *http.Request) {
+-	writeJSON(w, http.StatusOK, healthResponse{Status: "ok"})
++	sharedhttp.WriteOK(w, healthResponse{Status: "ok"})
+ }
+ 
+ func Readyz(w http.ResponseWriter, _ *http.Request) {
+-	writeJSON(w, http.StatusOK, healthResponse{Status: "ready"})
+-}
+-
+-func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
+-	w.Header().Set("Content-Type", "application/json")
+-	w.WriteHeader(statusCode)
+-
+-	_ = json.NewEncoder(w).Encode(payload)
++	sharedhttp.WriteOK(w, healthResponse{Status: "ready"})
+ }
+*** Update File: internal/transport/http/router/router.go
+@@
+ package router
+ 
+ import (
+ 	"net/http"
++	"time"
+ 
++	platformmiddleware "github.com/jiazaiwanbi/second-hand-platform/internal/platform/http/middleware"
++	"github.com/jiazaiwanbi/second-hand-platform/internal/platform/logger"
+ 	"github.com/jiazaiwanbi/second-hand-platform/internal/transport/http/handler"
+ )
+ 
+-func New() http.Handler {
++func New(appLogger *logger.Logger, timeout time.Duration) http.Handler {
+ 	r := http.NewServeMux()
+ 
+ 	r.HandleFunc("/healthz", handler.Healthz)
+ 	r.HandleFunc("/readyz", handler.Readyz)
+ 
+-	return r
++	return platformmiddleware.Chain(
++		r,
++		platformmiddleware.Timeout(timeout),
++		platformmiddleware.RequestID(),
++		platformmiddleware.Recovery(appLogger),
++		platformmiddleware.RequestLogger(appLogger),
++	)
+ }
+*** Update File: cmd/api/main.go
+@@
+ import (
+ 	"context"
+ 	"log"
+ 	"os/signal"
+ 	"syscall"
+ 
+ 	"github.com/jiazaiwanbi/second-hand-platform/internal/platform/config"
++	"github.com/jiazaiwanbi/second-hand-platform/internal/platform/logger"
+ 	platformhttp "github.com/jiazaiwanbi/second-hand-platform/internal/platform/httpserver"
+ 	httprouter "github.com/jiazaiwanbi/second-hand-platform/internal/transport/http/router"
+ )
+ 
+ func main() {
+-	cfg := config.Load()
++	cfg, err := config.Load()
++	if err != nil {
++		log.Fatal(err)
++	}
++
++	appLogger := logger.New()
++	appLogger.Info("application starting", map[string]any{
++		"app_env":   cfg.AppEnv,
++		"http_addr": cfg.HTTPAddr,
++	})
+ 
+-	server := platformhttp.New(cfg.HTTPAddr, httprouter.New())
++	server := platformhttp.New(cfg.HTTPAddr, cfg.ShutdownWait, httprouter.New(appLogger, cfg.HTTPTimeout))
+@@
+-	if err := server.Run(ctx); err != nil {
++	if err := server.Run(ctx); err != nil {
+ 		log.Fatal(err)
+ 	}
+ }
+*** Update File: internal/platform/httpserver/server.go
+@@
+-const shutdownTimeout = 10 * time.Second
+-
+ type Server struct {
++	shutdownTimeout time.Duration
+ 	httpServer *http.Server
+ }
+ 
+-func New(addr string, handler http.Handler) *Server {
++func New(addr string, shutdownTimeout time.Duration, handler http.Handler) *Server {
+ 	return &Server{
++		shutdownTimeout: shutdownTimeout,
+ 		httpServer: &http.Server{
+ 			Addr:              addr,
+ 			Handler:           handler,
+@@
+ 	case <-ctx.Done():
+-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
++		shutdownCtx, cancel := context.WithTimeout(context.Background(), s.shutdownTimeout)
+ 		defer cancel()
+*** Update File: internal/transport/http/router/router_test.go
+@@
+ import (
++	"encoding/json"
+ 	"net/http"
+ 	"net/http/httptest"
+ 	"testing"
++	"time"
++
++	"github.com/jiazaiwanbi/second-hand-platform/internal/platform/logger"
+ )
+@@
+-	New().ServeHTTP(recorder, req)
++	New(logger.New(), time.Second).ServeHTTP(recorder, req)
+@@
+ 	if recorder.Code != http.StatusOK {
+-		fatalf := "expected status %d, got %d"
+-		t.Fatalf(fatalf, http.StatusOK, recorder.Code)
++		t.Fatalf("expected status %d, got %d", http.StatusOK, recorder.Code)
+ 	}
++
++	var payload struct {
++		Code string `json:"code"`
++	}
++	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
++		t.Fatalf("unmarshal response: %v", err)
++	}
++
++	if payload.Code != "OK" {
++		t.Fatalf("expected code OK, got %s", payload.Code)
++	}
++
++	if recorder.Header().Get("X-Request-Id") == "" {
++		t.Fatal("expected request id header to be set")
++	}
+ }
+@@
+-	New().ServeHTTP(recorder, req)
++	New(logger.New(), time.Second).ServeHTTP(recorder, req)
+*** Update File: .env.example
+@@
++APP_ENV=local
+ APP_HTTP_ADDR=:8080
++APP_HTTP_TIMEOUT_SECONDS=15
+ 
+ POSTGRES_HOST=localhost
+ POSTGRES_PORT=5432
+*** Update File: README.md
+@@
+-## 当前完成阶段
+-
+-- 阶段 1：脚手架与本地可运行
+-- 已提供最小 Go HTTP 服务、`/healthz`、`/readyz`、本地 PostgreSQL Docker 依赖
++## 当前完成阶段
++
++- 阶段 2：平台层（配置、日志、错误、HTTP 中间件）
++- 已提供统一 JSON 响应、request id、recovery、timeout、请求日志
+@@
+ 默认监听地址为 `:8080`。
++
++可选环境变量：
++
++- `APP_ENV`：运行环境，默认 `local`
++- `APP_HTTP_ADDR`：HTTP 监听地址，默认 `:8080`
++- `APP_HTTP_TIMEOUT_SECONDS`：请求超时秒数，默认 `15`
+@@
+ ```bash
+ curl http://localhost:8080/healthz
+ curl http://localhost:8080/readyz
+ ```
++
++返回格式示例：
++
++```json
++{
++  "code": "OK",
++  "message": "success",
++  "data": {
++    "status": "ok"
++  }
++}
++```
+@@
+ - `make migrate-up` 依赖本机已安装 `migrate` CLI，且需要提前设置 `DATABASE_URL`
+ - 迁移体系将在后续阶段继续完善
++- `golangci-lint` 当前阶段尚未引入，跳过
+*** End Patch
