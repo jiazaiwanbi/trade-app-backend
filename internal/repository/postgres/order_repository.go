@@ -95,6 +95,10 @@ func (r *OrderRepository) UpdateStatus(ctx context.Context, order orderdomain.Or
 	switch order.Status {
 	case orderdomain.StatusCancelled:
 		listing, err = listing.ReleaseReservation()
+	case orderdomain.StatusPendingShipment:
+		// buyer paid, listing stays reserved
+	case orderdomain.StatusShipped:
+		// seller shipped, listing stays reserved
 	case orderdomain.StatusCompleted:
 		listing, err = listing.MarkSold()
 	default:
@@ -104,8 +108,10 @@ func (r *OrderRepository) UpdateStatus(ctx context.Context, order orderdomain.Or
 		return orderdomain.Order{}, err
 	}
 
-	if err := updateListingStatusTx(ctx, tx, listing.ID, listing.Status); err != nil {
-		return orderdomain.Order{}, err
+	if order.Status == orderdomain.StatusCancelled || order.Status == orderdomain.StatusCompleted {
+		if err := updateListingStatusTx(ctx, tx, listing.ID, listing.Status); err != nil {
+			return orderdomain.Order{}, err
+		}
 	}
 
 	updated, err := scanOrder(tx.QueryRow(ctx, `
@@ -161,7 +167,7 @@ func (r *OrderRepository) ListMine(ctx context.Context, userID int64, page int, 
 
 func getListingForUpdate(ctx context.Context, tx pgx.Tx, listingID int64) (listingdomain.Listing, error) {
 	listing, err := scanListing(tx.QueryRow(ctx, `
-    SELECT id, seller_id, category_id, title, description, price_cents, status, created_at, updated_at
+    SELECT id, seller_id, category_id, title, description, price_cents, image_urls, status, created_at, updated_at
     FROM listings
     WHERE id = $1
     FOR UPDATE

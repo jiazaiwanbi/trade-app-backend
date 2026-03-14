@@ -1,10 +1,9 @@
-﻿openapi: 3.0.3
+openapi: 3.0.3
 info:
   title: trade-app-backend API
   version: 0.1.0
   description: >-
-    课设精简版二手交易平台后端 API，覆盖认证、用户资料、分类、商品与最小订单闭环。
-servers:
+    璇捐绮剧畝鐗堜簩鎵嬩氦鏄撳钩鍙板悗绔?API锛岃鐩栬璇併€佺敤鎴疯祫鏂欍€佸垎绫汇€佸晢鍝佷笌鏈€灏忚鍗曢棴鐜€?servers:
   - url: http://localhost:8080
 paths:
   /healthz:
@@ -223,21 +222,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderEnvelope'
-  /api/v1/orders/{id}/complete:
-    post:
-      summary: Complete order
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/OrderID'
-      responses:
-        '200':
-          description: Completed order
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OrderEnvelope'
-  /api/v1/users/me/orders:
+  /api/v1/orders/{id}/pay:`n    post:`n      summary: Simulate payment`n      security:`n        - bearerAuth: []`n      parameters:`n        - $ref: '#/components/parameters/OrderID'`n      responses:`n        '200':`n          description: Paid order`n          content:`n            application/json:`n              schema:`n                $ref: '#/components/schemas/OrderEnvelope'`n  /api/v1/orders/{id}/ship:`n    post:`n      summary: Seller ships order`n      security:`n        - bearerAuth: []`n      parameters:`n        - $ref: '#/components/parameters/OrderID'`n      responses:`n        '200':`n          description: Shipped order`n          content:`n            application/json:`n              schema:`n                $ref: '#/components/schemas/OrderEnvelope'`n  /api/v1/orders/{id}/receive:`n    post:`n      summary: Buyer confirms receive`n      security:`n        - bearerAuth: []`n      parameters:`n        - $ref: '#/components/parameters/OrderID'`n      responses:`n        '200':`n          description: Completed order`n          content:`n            application/json:`n              schema:`n                $ref: '#/components/schemas/OrderEnvelope'`n  /api/v1/users/me/orders:
     get:
       summary: List current user's orders
       security:
@@ -331,10 +316,7 @@ components:
           type: string
         description:
           type: string
-        price_cents:
-          type: integer
-          format: int64
-        publish:
+        price_cents:\n          type: integer\n          format: int64\n        image_urls:\n          type: array\n          maxItems: 10\n          items:\n            type: string\n            format: uri\n        publish:
           type: boolean
     UpdateListingRequest:
       type: object
@@ -348,10 +330,7 @@ components:
           type: string
         description:
           type: string
-        price_cents:
-          type: integer
-          format: int64
-        status:
+        price_cents:\n          type: integer\n          format: int64\n        image_urls:\n          type: array\n          maxItems: 10\n          items:\n            type: string\n            format: uri\n        status:
           type: string
           enum: [draft, published, reserved, sold, archived]
     CreateOrderRequest:
@@ -403,10 +382,7 @@ components:
           type: string
         description:
           type: string
-        price_cents:
-          type: integer
-          format: int64
-        status:
+        price_cents:\n          type: integer\n          format: int64\n        image_urls:\n          type: array\n          maxItems: 10\n          items:\n            type: string\n            format: uri\n        status:
           type: string
         created_at:
           type: string
@@ -439,7 +415,7 @@ components:
           format: int64
         status:
           type: string
-          enum: [created, cancelled, completed]
+          enum: [pending_payment, pending_shipment, shipped, completed, cancelled]
         created_at:
           type: string
           format: date-time

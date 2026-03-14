@@ -23,11 +23,11 @@ func NewListingRepository(pool *pgxpool.Pool) *ListingRepository {
 
 func (r *ListingRepository) Create(ctx context.Context, listing listingdomain.Listing) (listingdomain.Listing, error) {
 	query := `
-    INSERT INTO listings (seller_id, category_id, title, description, price_cents, status)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING id, seller_id, category_id, title, description, price_cents, status, created_at, updated_at
+    INSERT INTO listings (seller_id, category_id, title, description, price_cents, image_urls, status)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING id, seller_id, category_id, title, description, price_cents, image_urls, status, created_at, updated_at
   `
-	created, err := scanListing(r.pool.QueryRow(ctx, query, listing.SellerID, listing.CategoryID, listing.Title, listing.Description, listing.PriceCents, listing.Status))
+	created, err := scanListing(r.pool.QueryRow(ctx, query, listing.SellerID, listing.CategoryID, listing.Title, listing.Description, listing.PriceCents, listing.ImageURLs, listing.Status))
 	if err != nil {
 		return listingdomain.Listing{}, fmt.Errorf("create listing: %w", err)
 	}
@@ -36,7 +36,7 @@ func (r *ListingRepository) Create(ctx context.Context, listing listingdomain.Li
 
 func (r *ListingRepository) GetByID(ctx context.Context, id int64) (listingdomain.Listing, error) {
 	query := `
-    SELECT id, seller_id, category_id, title, description, price_cents, status, created_at, updated_at
+    SELECT id, seller_id, category_id, title, description, price_cents, image_urls, status, created_at, updated_at
     FROM listings
     WHERE id = $1
   `
@@ -53,11 +53,11 @@ func (r *ListingRepository) GetByID(ctx context.Context, id int64) (listingdomai
 func (r *ListingRepository) Update(ctx context.Context, listing listingdomain.Listing) (listingdomain.Listing, error) {
 	query := `
     UPDATE listings
-    SET category_id = $2, title = $3, description = $4, price_cents = $5, status = $6, updated_at = NOW()
+    SET category_id = $2, title = $3, description = $4, price_cents = $5, image_urls = $6, status = $7, updated_at = NOW()
     WHERE id = $1
-    RETURNING id, seller_id, category_id, title, description, price_cents, status, created_at, updated_at
+    RETURNING id, seller_id, category_id, title, description, price_cents, image_urls, status, created_at, updated_at
   `
-	updated, err := scanListing(r.pool.QueryRow(ctx, query, listing.ID, listing.CategoryID, listing.Title, listing.Description, listing.PriceCents, listing.Status))
+	updated, err := scanListing(r.pool.QueryRow(ctx, query, listing.ID, listing.CategoryID, listing.Title, listing.Description, listing.PriceCents, listing.ImageURLs, listing.Status))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return listingdomain.Listing{}, listingdomain.ErrListingNotFound
@@ -90,7 +90,7 @@ func (r *ListingRepository) List(ctx context.Context, filter listingapp.ListFilt
 	}
 
 	query := fmt.Sprintf(`
-    SELECT id, seller_id, category_id, title, description, price_cents, status, created_at, updated_at
+    SELECT id, seller_id, category_id, title, description, price_cents, image_urls, status, created_at, updated_at
     FROM listings
     WHERE %s
     ORDER BY created_at DESC
@@ -106,7 +106,7 @@ func (r *ListingRepository) ListBySeller(ctx context.Context, sellerID int64, pa
 		return nil, 0, fmt.Errorf("count seller listings: %w", err)
 	}
 	query := `
-    SELECT id, seller_id, category_id, title, description, price_cents, status, created_at, updated_at
+    SELECT id, seller_id, category_id, title, description, price_cents, image_urls, status, created_at, updated_at
     FROM listings
     WHERE seller_id = $1
     ORDER BY created_at DESC
@@ -139,13 +139,15 @@ func (r *ListingRepository) listByQuery(ctx context.Context, query string, args 
 func scanListing(row interface{ Scan(dest ...any) error }) (listingdomain.Listing, error) {
 	var listing listingdomain.Listing
 	var categoryID *int64
+	var imageURLs []string
 	var status string
 	var createdAt time.Time
 	var updatedAt time.Time
-	if err := row.Scan(&listing.ID, &listing.SellerID, &categoryID, &listing.Title, &listing.Description, &listing.PriceCents, &status, &createdAt, &updatedAt); err != nil {
+	if err := row.Scan(&listing.ID, &listing.SellerID, &categoryID, &listing.Title, &listing.Description, &listing.PriceCents, &imageURLs, &status, &createdAt, &updatedAt); err != nil {
 		return listingdomain.Listing{}, err
 	}
 	listing.CategoryID = categoryID
+	listing.ImageURLs = imageURLs
 	listing.Status = listingdomain.Status(status)
 	listing.CreatedAt = createdAt
 	listing.UpdatedAt = updatedAt

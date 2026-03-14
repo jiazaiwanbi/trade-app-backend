@@ -45,6 +45,7 @@ func (h *ListingHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:       request.Title,
 		Description: request.Description,
 		PriceCents:  request.PriceCents,
+		ImageURLs:   request.ImageURLs,
 		Publish:     request.Publish,
 	})
 	if err != nil {
@@ -129,6 +130,7 @@ func (h *ListingHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Title:       request.Title,
 		Description: request.Description,
 		PriceCents:  request.PriceCents,
+		ImageURLs:   request.ImageURLs,
 		Status:      status,
 	})
 	if err != nil {
@@ -182,7 +184,7 @@ func (h *ListingHandler) handleListingError(w http.ResponseWriter, r *http.Reque
 		sharedhttp.WriteError(w, r, sharedhttp.AppError{StatusCode: http.StatusNotFound, Code: "NOT_FOUND", Message: "listing not found"})
 	case errors.Is(err, listingdomain.ErrForbidden):
 		sharedhttp.WriteError(w, r, sharedhttp.AppError{StatusCode: http.StatusForbidden, Code: "FORBIDDEN", Message: "forbidden"})
-	case errors.Is(err, listingdomain.ErrInvalidTitle), errors.Is(err, listingdomain.ErrInvalidDescription), errors.Is(err, listingdomain.ErrInvalidPrice), errors.Is(err, listingdomain.ErrInvalidStatusTransition):
+	case errors.Is(err, listingdomain.ErrInvalidTitle), errors.Is(err, listingdomain.ErrInvalidDescription), errors.Is(err, listingdomain.ErrInvalidPrice), errors.Is(err, listingdomain.ErrInvalidStatusTransition), errors.Is(err, listingdomain.ErrTooManyImages), errors.Is(err, listingdomain.ErrInvalidImageURL):
 		sharedhttp.WriteError(w, r, sharedhttp.AppError{StatusCode: http.StatusBadRequest, Code: "VALIDATION_ERROR", Message: err.Error()})
 	default:
 		sharedhttp.WriteError(w, r, sharedhttp.NewInternalError())
@@ -197,6 +199,7 @@ func toListingResponse(item listingdomain.Listing) dto.ListingResponse {
 		Title:       item.Title,
 		Description: item.Description,
 		PriceCents:  item.PriceCents,
+		ImageURLs:   item.ImageURLs,
 		Status:      string(item.Status),
 		CreatedAt:   item.CreatedAt.Format(listingTimeLayout),
 		UpdatedAt:   item.UpdatedAt.Format(listingTimeLayout),

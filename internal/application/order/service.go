@@ -19,9 +19,8 @@ type CreateInput struct {
 }
 
 type ActionInput struct {
-	OrderID  int64
-	ActorID  int64
-	Complete bool
+	OrderID int64
+	ActorID int64
 }
 
 type Service struct {
@@ -48,12 +47,36 @@ func (s *Service) Cancel(ctx context.Context, input ActionInput) (orderdomain.Or
 	return s.repo.UpdateStatus(ctx, updated)
 }
 
-func (s *Service) Complete(ctx context.Context, input ActionInput) (orderdomain.Order, error) {
+func (s *Service) Pay(ctx context.Context, input ActionInput) (orderdomain.Order, error) {
 	current, err := s.repo.GetByID(ctx, input.OrderID)
 	if err != nil {
 		return orderdomain.Order{}, err
 	}
-	updated, err := current.Complete(input.ActorID)
+	updated, err := current.Pay(input.ActorID)
+	if err != nil {
+		return orderdomain.Order{}, err
+	}
+	return s.repo.UpdateStatus(ctx, updated)
+}
+
+func (s *Service) Ship(ctx context.Context, input ActionInput) (orderdomain.Order, error) {
+	current, err := s.repo.GetByID(ctx, input.OrderID)
+	if err != nil {
+		return orderdomain.Order{}, err
+	}
+	updated, err := current.Ship(input.ActorID)
+	if err != nil {
+		return orderdomain.Order{}, err
+	}
+	return s.repo.UpdateStatus(ctx, updated)
+}
+
+func (s *Service) Receive(ctx context.Context, input ActionInput) (orderdomain.Order, error) {
+	current, err := s.repo.GetByID(ctx, input.OrderID)
+	if err != nil {
+		return orderdomain.Order{}, err
+	}
+	updated, err := current.Receive(input.ActorID)
 	if err != nil {
 		return orderdomain.Order{}, err
 	}

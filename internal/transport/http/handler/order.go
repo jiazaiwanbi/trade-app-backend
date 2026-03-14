@@ -43,11 +43,19 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
-	h.applyAction(w, r, false)
+	h.applyAction(w, r, "cancel")
 }
 
-func (h *OrderHandler) Complete(w http.ResponseWriter, r *http.Request) {
-	h.applyAction(w, r, true)
+func (h *OrderHandler) Pay(w http.ResponseWriter, r *http.Request) {
+	h.applyAction(w, r, "pay")
+}
+
+func (h *OrderHandler) Ship(w http.ResponseWriter, r *http.Request) {
+	h.applyAction(w, r, "ship")
+}
+
+func (h *OrderHandler) Receive(w http.ResponseWriter, r *http.Request) {
+	h.applyAction(w, r, "receive")
 }
 
 func (h *OrderHandler) ListMine(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +80,7 @@ func (h *OrderHandler) ListMine(w http.ResponseWriter, r *http.Request) {
 	sharedhttp.WriteOK(w, dto.ListResponse[dto.OrderResponse]{Page: page, PageSize: pageSize, Total: total, Items: responses})
 }
 
-func (h *OrderHandler) applyAction(w http.ResponseWriter, r *http.Request, complete bool) {
+func (h *OrderHandler) applyAction(w http.ResponseWriter, r *http.Request, action string) {
 	userID, ok := platformmiddleware.UserIDFromContext(r.Context())
 	if !ok {
 		sharedhttp.WriteError(w, r, sharedhttp.AppError{StatusCode: http.StatusUnauthorized, Code: "UNAUTHORIZED", Message: "authentication required"})
@@ -85,12 +93,19 @@ func (h *OrderHandler) applyAction(w http.ResponseWriter, r *http.Request, compl
 		return
 	}
 
-	input := orderapp.ActionInput{OrderID: orderID, ActorID: userID, Complete: complete}
+	input := orderapp.ActionInput{OrderID: orderID, ActorID: userID}
 	var item orderdomain.Order
-	if complete {
-		item, err = h.service.Complete(r.Context(), input)
-	} else {
+	switch action {
+	case "cancel":
 		item, err = h.service.Cancel(r.Context(), input)
+	case "pay":
+		item, err = h.service.Pay(r.Context(), input)
+	case "ship":
+		item, err = h.service.Ship(r.Context(), input)
+	case "receive":
+		item, err = h.service.Receive(r.Context(), input)
+	default:
+		err = orderdomain.ErrInvalidStatusTransition
 	}
 	if err != nil {
 		h.handleOrderError(w, r, err)

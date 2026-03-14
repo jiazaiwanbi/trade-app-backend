@@ -5,9 +5,11 @@ import "time"
 type Status string
 
 const (
-	StatusCreated   Status = "created"
-	StatusCancelled Status = "cancelled"
-	StatusCompleted Status = "completed"
+	StatusPendingPayment  Status = "pending_payment"
+	StatusPendingShipment Status = "pending_shipment"
+	StatusShipped         Status = "shipped"
+	StatusCompleted       Status = "completed"
+	StatusCancelled       Status = "cancelled"
 )
 
 type Order struct {
@@ -27,14 +29,14 @@ func New(listingID int64, buyerID int64, sellerID int64) (Order, error) {
 	if buyerID == sellerID {
 		return Order{}, ErrCannotOrderOwnListing
 	}
-	return Order{ListingID: listingID, BuyerID: buyerID, SellerID: sellerID, Status: StatusCreated}, nil
+	return Order{ListingID: listingID, BuyerID: buyerID, SellerID: sellerID, Status: StatusPendingPayment}, nil
 }
 
 func (o Order) Cancel(actorID int64) (Order, error) {
 	if actorID != o.BuyerID && actorID != o.SellerID {
 		return Order{}, ErrForbidden
 	}
-	if o.Status != StatusCreated {
+	if o.Status != StatusPendingPayment {
 		return Order{}, ErrInvalidStatusTransition
 	}
 	updated := o
@@ -42,11 +44,35 @@ func (o Order) Cancel(actorID int64) (Order, error) {
 	return updated, nil
 }
 
-func (o Order) Complete(actorID int64) (Order, error) {
-	if actorID != o.BuyerID && actorID != o.SellerID {
+func (o Order) Pay(actorID int64) (Order, error) {
+	if actorID != o.BuyerID {
 		return Order{}, ErrForbidden
 	}
-	if o.Status != StatusCreated {
+	if o.Status != StatusPendingPayment {
+		return Order{}, ErrInvalidStatusTransition
+	}
+	updated := o
+	updated.Status = StatusPendingShipment
+	return updated, nil
+}
+
+func (o Order) Ship(actorID int64) (Order, error) {
+	if actorID != o.SellerID {
+		return Order{}, ErrForbidden
+	}
+	if o.Status != StatusPendingShipment {
+		return Order{}, ErrInvalidStatusTransition
+	}
+	updated := o
+	updated.Status = StatusShipped
+	return updated, nil
+}
+
+func (o Order) Receive(actorID int64) (Order, error) {
+	if actorID != o.BuyerID {
+		return Order{}, ErrForbidden
+	}
+	if o.Status != StatusShipped {
 		return Order{}, ErrInvalidStatusTransition
 	}
 	updated := o

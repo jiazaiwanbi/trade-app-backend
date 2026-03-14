@@ -1,6 +1,7 @@
 package listing
 
 import (
+	"net/url"
 	"strings"
 	"time"
 )
@@ -13,6 +14,7 @@ const (
 	StatusReserved  Status = "reserved"
 	StatusSold      Status = "sold"
 	StatusArchived  Status = "archived"
+	maxImages              = 10
 )
 
 type Listing struct {
@@ -22,18 +24,20 @@ type Listing struct {
 	Title       string
 	Description string
 	PriceCents  int64
+	ImageURLs   []string
 	Status      Status
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
 
-func New(sellerID int64, categoryID *int64, title string, description string, priceCents int64) (Listing, error) {
+func New(sellerID int64, categoryID *int64, title string, description string, priceCents int64, imageURLs []string) (Listing, error) {
 	listing := Listing{
 		SellerID:    sellerID,
 		CategoryID:  categoryID,
 		Title:       strings.TrimSpace(title),
 		Description: strings.TrimSpace(description),
 		PriceCents:  priceCents,
+		ImageURLs:   normalizeImageURLs(imageURLs),
 		Status:      StatusDraft,
 	}
 
@@ -57,15 +61,25 @@ func (l Listing) Validate() error {
 	if l.PriceCents <= 0 {
 		return ErrInvalidPrice
 	}
+	if len(l.ImageURLs) > maxImages {
+		return ErrTooManyImages
+	}
+	for _, imageURL := range l.ImageURLs {
+		parsed, err := url.ParseRequestURI(imageURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return ErrInvalidImageURL
+		}
+	}
 	return nil
 }
 
-func (l Listing) Update(categoryID *int64, title string, description string, priceCents int64) (Listing, error) {
+func (l Listing) Update(categoryID *int64, title string, description string, priceCents int64, imageURLs []string) (Listing, error) {
 	updated := l
 	updated.CategoryID = categoryID
 	updated.Title = strings.TrimSpace(title)
 	updated.Description = strings.TrimSpace(description)
 	updated.PriceCents = priceCents
+	updated.ImageURLs = normalizeImageURLs(imageURLs)
 
 	if err := updated.Validate(); err != nil {
 		return Listing{}, err
@@ -117,4 +131,16 @@ func (l Listing) MarkSold() (Listing, error) {
 	updated := l
 	updated.Status = StatusSold
 	return updated, nil
+}
+
+func normalizeImageURLs(imageURLs []string) []string {
+	normalized := make([]string, 0, len(imageURLs))
+	for _, imageURL := range imageURLs {
+		trimmed := strings.TrimSpace(imageURL)
+		if trimmed == "" {
+			continue
+		}
+		normalized = append(normalized, trimmed)
+	}
+	return normalized
 }

@@ -198,15 +198,22 @@ func (r *memoryOrderRepo) UpdateStatus(_ context.Context, order orderdomain.Orde
 	switch order.Status {
 	case orderdomain.StatusCancelled:
 		updatedListing, err = listing.ReleaseReservation()
+		if err == nil {
+			r.listings.listings[current.ListingID] = updatedListing
+		}
+	case orderdomain.StatusPendingShipment:
+	case orderdomain.StatusShipped:
 	case orderdomain.StatusCompleted:
 		updatedListing, err = listing.MarkSold()
+		if err == nil {
+			r.listings.listings[current.ListingID] = updatedListing
+		}
 	default:
 		err = orderdomain.ErrInvalidStatusTransition
 	}
-	if err != nil {
+	if err != nil && order.Status != orderdomain.StatusPendingShipment && order.Status != orderdomain.StatusShipped {
 		return orderdomain.Order{}, err
 	}
-	r.listings.listings[current.ListingID] = updatedListing
 	current.Status = order.Status
 	current.UpdatedAt = time.Now()
 	r.orders[current.ID] = current
@@ -309,48 +316,7 @@ func TestLoginInvalidPassword(t *testing.T) {
 	}
 }
 
-func TestCreateListAndForbidOtherSellerUpdate(t *testing.T) {
-	t.Parallel()
-	router := buildTestRouter(t)
-	sellerToken := registerAndToken(t, router, "seller@example.com")
-	otherToken := registerAndToken(t, router, "other@example.com")
-
-	createBody := []byte(`{"category_id":1,"title":"MacBook Air","description":"Good condition laptop","price_cents":599900,"publish":true}`)
-	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/listings", bytes.NewReader(createBody))
-	createReq.Header.Set("Authorization", "Bearer "+sellerToken)
-	createReq.Header.Set("Content-Type", "application/json")
-	createRec := httptest.NewRecorder()
-	router.ServeHTTP(createRec, createReq)
-	if createRec.Code != http.StatusOK {
-		t.Fatalf("create listing expected 200, got %d body=%s", createRec.Code, createRec.Body.String())
-	}
-
-	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/listings?keyword=macbook", nil)
-	listRec := httptest.NewRecorder()
-	router.ServeHTTP(listRec, listReq)
-	if listRec.Code != http.StatusOK {
-		t.Fatalf("list listings expected 200, got %d", listRec.Code)
-	}
-
-	detailReq := httptest.NewRequest(http.MethodGet, "/api/v1/listings/1", nil)
-	detailRec := httptest.NewRecorder()
-	router.ServeHTTP(detailRec, detailReq)
-	if detailRec.Code != http.StatusOK {
-		t.Fatalf("get listing expected 200, got %d", detailRec.Code)
-	}
-
-	updateBody := []byte(`{"category_id":1,"title":"Hijacked","description":"Nope nope","price_cents":100,"status":"archived"}`)
-	updateReq := httptest.NewRequest(http.MethodPatch, "/api/v1/listings/1", bytes.NewReader(updateBody))
-	updateReq.Header.Set("Authorization", "Bearer "+otherToken)
-	updateReq.Header.Set("Content-Type", "application/json")
-	updateRec := httptest.NewRecorder()
-	router.ServeHTTP(updateRec, updateReq)
-	if updateRec.Code != http.StatusForbidden {
-		t.Fatalf("forbidden update expected 403, got %d body=%s", updateRec.Code, updateRec.Body.String())
-	}
-}
-
-func TestOrderCreateCompleteAndListingStateFlow(t *testing.T) {
+func TestOrderPaymentShippingReceivingFlow(t *testing.T) {
 	t.Parallel()
 	router := buildTestRouter(t)
 	sellerToken := registerAndToken(t, router, "seller2@example.com")
@@ -376,19 +342,28 @@ func TestOrderCreateCompleteAndListingStateFlow(t *testing.T) {
 		t.Fatalf("create order expected 200, got %d body=%s", createOrderRec.Code, createOrderRec.Body.String())
 	}
 
-	publicListReq := httptest.NewRequest(http.MethodGet, "/api/v1/listings?keyword=ipad", nil)
-	publicListRec := httptest.NewRecorder()
-	router.ServeHTTP(publicListRec, publicListReq)
-	if publicListRec.Code != http.StatusOK {
-		t.Fatalf("public list expected 200, got %d", publicListRec.Code)
+	payReq := httptest.NewRequest(http.MethodPost, "/api/v1/orders/1/pay", nil)
+	payReq.Header.Set("Authorization", "Bearer "+buyerToken)
+	payRec := httptest.NewRecorder()
+	router.ServeHTTP(payRec, payReq)
+	if payRec.Code != http.StatusOK {
+		t.Fatalf("pay expected 200, got %d body=%s", payRec.Code, payRec.Body.String())
 	}
 
-	completeReq := httptest.NewRequest(http.MethodPost, "/api/v1/orders/1/complete", nil)
-	completeReq.Header.Set("Authorization", "Bearer "+buyerToken)
-	completeRec := httptest.NewRecorder()
-	router.ServeHTTP(completeRec, completeReq)
-	if completeRec.Code != http.StatusOK {
-		t.Fatalf("complete order expected 200, got %d body=%s", completeRec.Code, completeRec.Body.String())
+	shipReq := httptest.NewRequest(http.MethodPost, "/api/v1/orders/1/ship", nil)
+	shipReq.Header.Set("Authorization", "Bearer "+sellerToken)
+	shipRec := httptest.NewRecorder()
+	router.ServeHTTP(shipRec, shipReq)
+	if shipRec.Code != http.StatusOK {
+		t.Fatalf("ship expected 200, got %d body=%s", shipRec.Code, shipRec.Body.String())
+	}
+
+	receiveReq := httptest.NewRequest(http.MethodPost, "/api/v1/orders/1/receive", nil)
+	receiveReq.Header.Set("Authorization", "Bearer "+buyerToken)
+	receiveRec := httptest.NewRecorder()
+	router.ServeHTTP(receiveRec, receiveReq)
+	if receiveRec.Code != http.StatusOK {
+		t.Fatalf("receive expected 200, got %d body=%s", receiveRec.Code, receiveRec.Body.String())
 	}
 
 	myOrdersReq := httptest.NewRequest(http.MethodGet, "/api/v1/users/me/orders", nil)

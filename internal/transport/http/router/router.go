@@ -57,9 +57,23 @@ func New(
 		}
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}), platformmiddleware.Auth(tokenManager)))
-	r.Handle("/api/v1/orders/{id}/complete", platformmiddleware.Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r.Handle("/api/v1/orders/{id}/pay", platformmiddleware.Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			orderHandler.Complete(w, r)
+			orderHandler.Pay(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}), platformmiddleware.Auth(tokenManager)))
+	r.Handle("/api/v1/orders/{id}/ship", platformmiddleware.Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			orderHandler.Ship(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}), platformmiddleware.Auth(tokenManager)))
+	r.Handle("/api/v1/orders/{id}/receive", platformmiddleware.Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			orderHandler.Receive(w, r)
 			return
 		}
 		w.WriteHeader(http.StatusMethodNotAllowed)

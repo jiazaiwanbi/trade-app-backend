@@ -27,6 +27,7 @@ type CreateInput struct {
 	Title       string
 	Description string
 	PriceCents  int64
+	ImageURLs   []string
 	Publish     bool
 }
 
@@ -37,6 +38,7 @@ type UpdateInput struct {
 	Title       string
 	Description string
 	PriceCents  int64
+	ImageURLs   []string
 	Status      *listingdomain.Status
 }
 
@@ -49,7 +51,7 @@ func NewService(repo Repository) *Service {
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (listingdomain.Listing, error) {
-	listing, err := listingdomain.New(input.SellerID, input.CategoryID, input.Title, input.Description, input.PriceCents)
+	listing, err := listingdomain.New(input.SellerID, input.CategoryID, input.Title, input.Description, input.PriceCents, input.ImageURLs)
 	if err != nil {
 		return listingdomain.Listing{}, err
 	}
@@ -95,7 +97,7 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (listingdomain.
 		return listingdomain.Listing{}, listingdomain.ErrForbidden
 	}
 
-	updated, err := current.Update(input.CategoryID, input.Title, input.Description, input.PriceCents)
+	updated, err := current.Update(input.CategoryID, input.Title, input.Description, input.PriceCents, input.ImageURLs)
 	if err != nil {
 		return listingdomain.Listing{}, err
 	}

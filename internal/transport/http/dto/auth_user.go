@@ -17,19 +17,21 @@ type UpdateMeRequest struct {
 }
 
 type CreateListingRequest struct {
-	CategoryID  *int64 `json:"category_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	PriceCents  int64  `json:"price_cents"`
-	Publish     bool   `json:"publish"`
+	CategoryID  *int64   `json:"category_id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	PriceCents  int64    `json:"price_cents"`
+	ImageURLs   []string `json:"image_urls"`
+	Publish     bool     `json:"publish"`
 }
 
 type UpdateListingRequest struct {
-	CategoryID  *int64  `json:"category_id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	PriceCents  int64   `json:"price_cents"`
-	Status      *string `json:"status"`
+	CategoryID  *int64   `json:"category_id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	PriceCents  int64    `json:"price_cents"`
+	ImageURLs   []string `json:"image_urls"`
+	Status      *string  `json:"status"`
 }
 
 type CreateOrderRequest struct {
@@ -51,15 +53,16 @@ type AuthResponse struct {
 }
 
 type ListingResponse struct {
-	ID          int64  `json:"id"`
-	SellerID    int64  `json:"seller_id"`
-	CategoryID  *int64 `json:"category_id,omitempty"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	PriceCents  int64  `json:"price_cents"`
-	Status      string `json:"status"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	ID          int64    `json:"id"`
+	SellerID    int64    `json:"seller_id"`
+	CategoryID  *int64   `json:"category_id,omitempty"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	PriceCents  int64    `json:"price_cents"`
+	ImageURLs   []string `json:"image_urls"`
+	Status      string   `json:"status"`
+	CreatedAt   string   `json:"created_at"`
+	UpdatedAt   string   `json:"updated_at"`
 }
 
 type CategoryResponse struct {

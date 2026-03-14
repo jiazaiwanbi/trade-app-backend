@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -45,6 +48,8 @@ type PostgresConfig struct {
 }
 
 func Load() (Config, error) {
+	loadDotEnv()
+
 	cfg, err := loadBase()
 	if err != nil {
 		return Config{}, err
@@ -58,6 +63,7 @@ func Load() (Config, error) {
 }
 
 func LoadForMigrate() (Config, error) {
+	loadDotEnv()
 	return loadBase()
 }
 
@@ -119,6 +125,27 @@ func (p PostgresConfig) URL() string {
 		p.Database,
 		values.Encode(),
 	)
+}
+
+func loadDotEnv() {
+	for _, candidate := range dotEnvCandidates() {
+		if err := godotenv.Overload(candidate); err == nil {
+			return
+		}
+	}
+}
+
+func dotEnvCandidates() []string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return []string{".env"}
+	}
+
+	return []string{
+		filepath.Join(cwd, ".env"),
+		filepath.Join(cwd, "..", ".env"),
+		filepath.Join(cwd, "..", "..", ".env"),
+	}
 }
 
 func getEnv(key string, fallback string) string {
