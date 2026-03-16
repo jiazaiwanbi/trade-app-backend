@@ -1,76 +1,85 @@
-# trade-app-backend锛堣璁剧簿绠€鐗堬級
+# trade-app-backend（课设精简版）
 
-鏈粨搴撳疄鐜颁竴涓簩鎵嬩氦鏄撳钩鍙板悗绔殑璇捐绮剧畝鐗?MVP锛屽綋鍓嶅凡缁忓叿澶囦粠娉ㄥ唽鐧诲綍鍒板晢鍝佸彂甯冦€佷笅鍗曘€佸畬鎴愯鍗曠殑鏈€灏忎氦鏄撻棴鐜€?
-## 褰撳墠浜や粯鑼冨洿
+`trade-app-backend` 是一个面向二手交易场景的 Go 后端服务，当前采用模块化单体架构，覆盖从用户注册登录、商品发布，到最小订单闭环的核心能力。
 
-宸插畬鎴愰樁娈碉細
-- 闃舵 1锛氳剼鎵嬫灦涓庢湰鍦板彲杩愯
-- 闃舵 2锛氶厤缃€佹棩蹇椼€侀敊璇拰涓棿浠?- 闃舵 3锛歅ostgreSQL 涓庤縼绉讳綋绯?- 闃舵 4锛氳璇佷笌鐢ㄦ埛璧勬枡
-- 闃舵 5锛氬晢鍝佷笌鍒嗙被
-- 闃舵 6锛氭渶灏忚鍗曢棴鐜?- 闃舵 7锛歄penAPI銆丷EADME銆丏ocker 鏀跺熬
+## 当前能力
 
-褰撳墠瀹炵幇鐨勪笟鍔¤兘鍔涳細
-- 鐢ㄦ埛娉ㄥ唽銆佺櫥褰曘€丣WT Access Token
-- `GET/PATCH /api/v1/users/me`
-- 鍒嗙被鍒楄〃
-- 鍟嗗搧鍒涘缓銆佸垪琛ㄣ€佽鎯呫€佺紪杈戙€佹垜鐨勫晢鍝?- 璁㈠崟鍒涘缓銆佸彇娑堛€佸畬鎴愩€佹垜鐨勮鍗?
-## 浠庨浂鍚姩
+- 用户注册、登录、JWT Access Token 鉴权
+- `GET /api/v1/users/me`
+- `PATCH /api/v1/users/me`
+- 分类列表
+- 商品创建、列表、详情、编辑、我的商品
+- 订单创建、支付模拟、发货模拟、收货确认、取消、我的订单
+- 健康检查和数据库就绪检查
 
-### 1. 鍑嗗鐜鍙橀噺
+## 快速开始
 
-澶嶅埗鏍蜂緥鏂囦欢锛?
-```powershell
-Copy-Item .env.example .env
+### 1. 准备环境变量
+
+复制环境变量模板：
+
+```bash
+cp .env.example .env
 ```
 
-绋嬪簭浼氶粯璁ゅ皾璇曞姞杞介」鐩牴鐩綍涓嬬殑 `.env` 鏂囦欢銆?
-鑷冲皯纭杩欎簺鍙橀噺鍙敤锛?- `JWT_SECRET`
+应用启动时会自动尝试加载项目根目录下的 `.env` 文件。
+
+至少确认以下变量存在：
+
+- `JWT_SECRET`
 - `POSTGRES_HOST`
 - `POSTGRES_PORT`
 - `POSTGRES_DB`
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
 
-### 2. 鍚姩 PostgreSQL
+### 2. 启动 PostgreSQL
 
-```powershell
+```bash
 docker compose up -d
 ```
 
-### 3. 鎵ц鏁版嵁搴撹縼绉?
-```powershell
+### 3. 执行数据库迁移
+
+```bash
 go run ./cmd/migrate up
 go run ./cmd/migrate version
 ```
 
-棰勬湡鐗堟湰锛歚version=4 dirty=false`
+预期输出：
 
-### 4. 鍚姩 API
+```text
+version=5 dirty=false
+```
 
-```powershell
+### 4. 启动 API
+
+```bash
 go run ./cmd/api
 ```
 
-### 5. 楠岃瘉鍋ュ悍妫€鏌?
-```powershell
-Invoke-WebRequest http://127.0.0.1:8080/healthz
-Invoke-WebRequest http://127.0.0.1:8080/readyz
+### 5. 验证健康检查
+
+```bash
+curl http://127.0.0.1:8080/healthz
+curl http://127.0.0.1:8080/readyz
 ```
 
-## Docker 鍚姩鏂瑰紡
+## Docker 方式运行
 
-鏋勫缓闀滃儚锛?
-```powershell
+构建镜像：
+
+```bash
 docker build -t trade-app-backend .
 ```
 
-杩愯瀹瑰櫒鏃惰鑷娉ㄥ叆鐜鍙橀噺锛屼緥濡傦細
+运行容器时显式注入环境变量：
 
-```powershell
+```bash
 docker run --rm -p 8080:8080 --env-file .env trade-app-backend
 ```
 
-## 甯哥敤鍛戒护
+## 常用命令
 
 ```bash
 make fmt
@@ -81,29 +90,35 @@ make migrate-down
 make migrate-version
 ```
 
-## 鏍稿績鎺ュ彛
+## 核心接口
 
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/users/me`
 - `PATCH /api/v1/users/me`
 - `GET /api/v1/categories`
-- `POST /api/v1/listings`
 - `GET /api/v1/listings`
 - `GET /api/v1/listings/{id}`
+- `POST /api/v1/listings`
 - `PATCH /api/v1/listings/{id}`
 - `GET /api/v1/users/me/listings`
 - `POST /api/v1/orders`
 - `POST /api/v1/orders/{id}/cancel`
-- `POST /api/v1/orders/{id}/pay`n- `POST /api/v1/orders/{id}/ship`n- `POST /api/v1/orders/{id}/receive``
+- `POST /api/v1/orders/{id}/pay`
+- `POST /api/v1/orders/{id}/ship`
+- `POST /api/v1/orders/{id}/receive`
 - `GET /api/v1/users/me/orders`
 
-瀹屾暣濂戠害瑙侊細`api/openapi/openapi.yaml`
+OpenAPI 文档见：`api/openapi/openapi.yaml`
 
-## 鏈€灏忚仈璋冪ず渚?
-### 1. 娉ㄥ唽鍗栧涓庝拱瀹?
-```json
+## 最小联调示例
+
+### 1. 注册卖家和买家
+
+```http
 POST /api/v1/auth/register
+Content-Type: application/json
+
 {
   "email": "seller@example.com",
   "password": "secret123",
@@ -111,8 +126,10 @@ POST /api/v1/auth/register
 }
 ```
 
-```json
+```http
 POST /api/v1/auth/register
+Content-Type: application/json
+
 {
   "email": "buyer@example.com",
   "password": "secret123",
@@ -120,47 +137,74 @@ POST /api/v1/auth/register
 }
 ```
 
-### 2. 鍗栧鍒涘缓鍟嗗搧
+### 2. 卖家创建商品
 
-璇锋眰澶达細`Authorization: Bearer <seller_token>`
+请求头：
 
-```json
+```text
+Authorization: Bearer <seller_token>
+```
+
+```http
 POST /api/v1/listings
+Content-Type: application/json
+
 {
   "category_id": 1,
   "title": "ThinkPad X1 Carbon",
   "description": "Lightly used business laptop",
-  "price_cents": 450000,\n  "image_urls": [\n    "https://example.com/image-1.jpg",\n    "https://example.com/image-2.jpg"\n  ],\n  "publish": true
+  "price_cents": 450000,
+  "image_urls": [
+    "https://example.com/image-1.jpg",
+    "https://example.com/image-2.jpg"
+  ],
+  "publish": true
 }
 ```
 
-### 3. 涔板涓嬪崟
+### 3. 买家下单
 
-璇锋眰澶达細`Authorization: Bearer <buyer_token>`
+请求头：
 
-```json
+```text
+Authorization: Bearer <buyer_token>
+```
+
+```http
 POST /api/v1/orders
+Content-Type: application/json
+
 {
   "listing_id": 1
 }
 ```
 
-### 4. 涔板瀹屾垚璁㈠崟
+### 4. 推进订单状态
 
-璇锋眰澶达細`Authorization: Bearer <buyer_token>`
+- 买家或卖家可取消：`POST /api/v1/orders/{id}/cancel`
+- 买家支付模拟：`POST /api/v1/orders/{id}/pay`
+- 卖家发货模拟：`POST /api/v1/orders/{id}/ship`
+- 买家确认收货：`POST /api/v1/orders/{id}/receive`
 
-```text
-POST /api/v1/orders/1/complete
-```
-
-### 5. 鏌ヨ鎴戠殑璁㈠崟
-
-璇锋眰澶达細`Authorization: Bearer <buyer_token>`
+## 项目结构
 
 ```text
-GET /api/v1/users/me/orders?page=1&page_size=20
+cmd/
+  api/                # API 启动入口
+  migrate/            # 数据库迁移入口
+api/openapi/          # OpenAPI 契约
+db/migrations/        # SQL 迁移文件
+internal/
+  application/        # 用例编排
+  domain/             # 领域模型和规则
+  platform/           # 配置、日志、数据库、HTTP 基础设施
+  repository/         # PostgreSQL 仓储实现
+  shared/             # 通用响应和辅助组件
+  transport/          # HTTP handler、router、DTO
 ```
 
-## 鏂囨。涓庨獙璇佽鏄?
-- OpenAPI 宸插缓绔嬶細`api/openapi/openapi.yaml`
-- `openapi lint` / `openapi validate`锛氬綋鍓嶄粨搴撴湭寮曞叆瀵瑰簲宸ュ叿锛岄樁娈?7 鎸夎姹傛槑纭烦杩?- 鎵€鏈夋帴鍙ｆ枃妗ｄ粎瑕嗙洊褰撳墠宸茬粡瀹炵幇鐨勮兘鍔涳紝娌℃湁棰濆澹版槑鏈潵闃舵鎺ュ彛
+## 注意事项
+
+- `go run ./cmd/api` 会校验 `JWT_SECRET`，未配置时会启动失败。
+- `go run ./cmd/migrate up` 需要先确保 PostgreSQL 已启动。
+- 当前仓库里部分文件曾出现过 BOM 或错误转码问题；如果再次出现乱码，优先检查编辑器保存编码是否为 UTF-8。

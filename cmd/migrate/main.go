@@ -97,7 +97,7 @@ func migrateUp(db *sql.DB) error {
 		if err := applyMigration(db, file); err != nil {
 			return err
 		}
-		return nil
+		version = file.Version
 	}
 
 	return nil

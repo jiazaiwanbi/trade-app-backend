@@ -1,4 +1,4 @@
-﻿APP_ENTRY := ./cmd/api
+APP_ENTRY := ./cmd/api
 MIGRATE_ENTRY := ./cmd/migrate
 
 .PHONY: fmt test run migrate-up migrate-down migrate-version

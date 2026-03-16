@@ -3,7 +3,8 @@ info:
   title: trade-app-backend API
   version: 0.1.0
   description: >-
-    璇捐绮剧畝鐗堜簩鎵嬩氦鏄撳钩鍙板悗绔?API锛岃鐩栬璇併€佺敤鎴疯祫鏂欍€佸垎绫汇€佸晢鍝佷笌鏈€灏忚鍗曢棴鐜€?servers:
+    课设精简版二手交易平台后端 API，覆盖认证、用户资料、分类、商品与最小订单闭环。
+servers:
   - url: http://localhost:8080
 paths:
   /healthz:
@@ -11,13 +12,13 @@ paths:
       summary: Liveness health check
       responses:
         '200':
-          description: ok
+          description: OK
   /readyz:
     get:
       summary: Readiness health check
       responses:
         '200':
-          description: ready
+          description: Ready
   /api/v1/auth/register:
     post:
       summary: Register a new user
@@ -222,7 +223,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderEnvelope'
-  /api/v1/orders/{id}/pay:`n    post:`n      summary: Simulate payment`n      security:`n        - bearerAuth: []`n      parameters:`n        - $ref: '#/components/parameters/OrderID'`n      responses:`n        '200':`n          description: Paid order`n          content:`n            application/json:`n              schema:`n                $ref: '#/components/schemas/OrderEnvelope'`n  /api/v1/orders/{id}/ship:`n    post:`n      summary: Seller ships order`n      security:`n        - bearerAuth: []`n      parameters:`n        - $ref: '#/components/parameters/OrderID'`n      responses:`n        '200':`n          description: Shipped order`n          content:`n            application/json:`n              schema:`n                $ref: '#/components/schemas/OrderEnvelope'`n  /api/v1/orders/{id}/receive:`n    post:`n      summary: Buyer confirms receive`n      security:`n        - bearerAuth: []`n      parameters:`n        - $ref: '#/components/parameters/OrderID'`n      responses:`n        '200':`n          description: Completed order`n          content:`n            application/json:`n              schema:`n                $ref: '#/components/schemas/OrderEnvelope'`n  /api/v1/users/me/orders:
+  /api/v1/orders/{id}/pay:
+    post:
+      summary: Simulate payment
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderID'
+      responses:
+        '200':
+          description: Paid order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderEnvelope'
+  /api/v1/orders/{id}/ship:
+    post:
+      summary: Seller ships order
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderID'
+      responses:
+        '200':
+          description: Shipped order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderEnvelope'
+  /api/v1/orders/{id}/receive:
+    post:
+      summary: Buyer confirms receive
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderID'
+      responses:
+        '200':
+          description: Completed order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderEnvelope'
+  /api/v1/users/me/orders:
     get:
       summary: List current user's orders
       security:
@@ -278,7 +321,10 @@ components:
           example: success
     RegisterRequest:
       type: object
-      required: [email, password, nickname]
+      required:
+        - email
+        - password
+        - nickname
       properties:
         email:
           type: string
@@ -290,7 +336,9 @@ components:
           type: string
     LoginRequest:
       type: object
-      required: [email, password]
+      required:
+        - email
+        - password
       properties:
         email:
           type: string
@@ -306,7 +354,10 @@ components:
           type: string
     CreateListingRequest:
       type: object
-      required: [title, description, price_cents]
+      required:
+        - title
+        - description
+        - price_cents
       properties:
         category_id:
           type: integer
@@ -316,11 +367,19 @@ components:
           type: string
         description:
           type: string
-        price_cents:\n          type: integer\n          format: int64\n        image_urls:\n          type: array\n          maxItems: 10\n          items:\n            type: string\n            format: uri\n        publish:
+        price_cents:
+          type: integer
+          format: int64
+        image_urls:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            format: uri
+        publish:
           type: boolean
     UpdateListingRequest:
       type: object
-      required: [title, description, price_cents]
       properties:
         category_id:
           type: integer
@@ -330,12 +389,27 @@ components:
           type: string
         description:
           type: string
-        price_cents:\n          type: integer\n          format: int64\n        image_urls:\n          type: array\n          maxItems: 10\n          items:\n            type: string\n            format: uri\n        status:
+        price_cents:
+          type: integer
+          format: int64
+        image_urls:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            format: uri
+        status:
           type: string
-          enum: [draft, published, reserved, sold, archived]
+          enum:
+            - draft
+            - published
+            - reserved
+            - sold
+            - archived
     CreateOrderRequest:
       type: object
-      required: [listing_id]
+      required:
+        - listing_id
       properties:
         listing_id:
           type: integer
@@ -382,8 +456,22 @@ components:
           type: string
         description:
           type: string
-        price_cents:\n          type: integer\n          format: int64\n        image_urls:\n          type: array\n          maxItems: 10\n          items:\n            type: string\n            format: uri\n        status:
+        price_cents:
+          type: integer
+          format: int64
+        image_urls:
+          type: array
+          items:
+            type: string
+            format: uri
+        status:
           type: string
+          enum:
+            - draft
+            - published
+            - reserved
+            - sold
+            - archived
         created_at:
           type: string
           format: date-time
@@ -415,7 +503,12 @@ components:
           format: int64
         status:
           type: string
-          enum: [pending_payment, pending_shipment, shipped, completed, cancelled]
+          enum:
+            - pending_payment
+            - pending_shipment
+            - shipped
+            - completed
+            - cancelled
         created_at:
           type: string
           format: date-time
